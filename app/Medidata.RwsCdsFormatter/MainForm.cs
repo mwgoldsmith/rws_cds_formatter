@@ -54,6 +54,9 @@ namespace Medidata.RwsCdsFormatter
                 return;
 
             sourceFileTextBox.Text = sourceOpenFileDialog.FileName;
+            if (outputFileTextBox.Text.Length == 0)
+                outputFileTextBox.Text = sourceFileTextBox.Text + @".xml";
+
             formatButton.Enabled = CanEnableFormatButton();
         }
 
