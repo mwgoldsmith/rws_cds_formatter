@@ -39,6 +39,7 @@
             this.formatButton = new System.Windows.Forms.Button();
             this.rowTemplateTextBox = new System.Windows.Forms.TextBox();
             this.label3 = new System.Windows.Forms.Label();
+            this.prettyPrintButton = new System.Windows.Forms.Button();
             this.mainMenuStrip.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -96,6 +97,7 @@
             this.sourceFileTextBox.Name = "sourceFileTextBox";
             this.sourceFileTextBox.Size = new System.Drawing.Size(344, 20);
             this.sourceFileTextBox.TabIndex = 2;
+            this.sourceFileTextBox.TextChanged += new System.EventHandler(this.sourceFileTextBox_TextChanged);
             // 
             // sourceBrowseButton
             // 
@@ -127,6 +129,7 @@
             this.outputFileTextBox.Name = "outputFileTextBox";
             this.outputFileTextBox.Size = new System.Drawing.Size(344, 20);
             this.outputFileTextBox.TabIndex = 5;
+            this.outputFileTextBox.TextChanged += new System.EventHandler(this.outputFileTextBox_TextChanged);
             // 
             // label2
             // 
@@ -140,6 +143,7 @@
             // formatButton
             // 
             this.formatButton.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Right)));
+            this.formatButton.Enabled = false;
             this.formatButton.Location = new System.Drawing.Point(452, 297);
             this.formatButton.Name = "formatButton";
             this.formatButton.Size = new System.Drawing.Size(75, 23);
@@ -157,9 +161,11 @@
             this.rowTemplateTextBox.MaxLength = 65535;
             this.rowTemplateTextBox.Multiline = true;
             this.rowTemplateTextBox.Name = "rowTemplateTextBox";
-            this.rowTemplateTextBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.rowTemplateTextBox.ScrollBars = System.Windows.Forms.ScrollBars.Both;
             this.rowTemplateTextBox.Size = new System.Drawing.Size(425, 210);
             this.rowTemplateTextBox.TabIndex = 8;
+            this.rowTemplateTextBox.WordWrap = false;
+            this.rowTemplateTextBox.TextChanged += new System.EventHandler(this.rowTemplateTextBox_TextChanged);
             // 
             // label3
             // 
@@ -170,11 +176,23 @@
             this.label3.TabIndex = 7;
             this.label3.Text = "Row template:";
             // 
+            // prettyPrintButton
+            // 
+            this.prettyPrintButton.Enabled = false;
+            this.prettyPrintButton.Location = new System.Drawing.Point(15, 268);
+            this.prettyPrintButton.Name = "prettyPrintButton";
+            this.prettyPrintButton.Size = new System.Drawing.Size(75, 23);
+            this.prettyPrintButton.TabIndex = 10;
+            this.prettyPrintButton.Text = "Pretty";
+            this.prettyPrintButton.UseVisualStyleBackColor = true;
+            this.prettyPrintButton.Click += new System.EventHandler(this.prettyPrintButton_Click);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(539, 332);
+            this.Controls.Add(this.prettyPrintButton);
             this.Controls.Add(this.formatButton);
             this.Controls.Add(this.rowTemplateTextBox);
             this.Controls.Add(this.label3);
@@ -211,6 +229,7 @@
         private System.Windows.Forms.Button formatButton;
         private System.Windows.Forms.TextBox rowTemplateTextBox;
         private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.Button prettyPrintButton;
     }
 }
 

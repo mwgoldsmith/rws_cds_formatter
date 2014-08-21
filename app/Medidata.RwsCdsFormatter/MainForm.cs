@@ -1,25 +1,52 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using DotLiquid;
+using Medidata.RwsCdsFormatter.Liquid;
 
 namespace Medidata.RwsCdsFormatter
 {
     public partial class MainForm : Form
     {
+        #region Private fields
+
+        private bool _running;
+        private string _template;
+
+        #endregion
+
+        #region Constructor
+
+        /// <summary>
+        /// 
+        /// </summary>
         public MainForm() {
             InitializeComponent();
         }
 
+        #endregion
+
         #region Control event handlers
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void exitToolStripMenuItem_Click(object sender, EventArgs e) {
             Close();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void sourceBrowseButton_Click(object sender, EventArgs e) {
             var result = sourceOpenFileDialog.ShowDialog();
 
@@ -27,8 +54,14 @@ namespace Medidata.RwsCdsFormatter
                 return;
 
             sourceFileTextBox.Text = sourceOpenFileDialog.FileName;
+            formatButton.Enabled = CanEnableFormatButton();
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void outputBrowseButton_Click(object sender, EventArgs e) {
             var result = outputSaveFileDialog.ShowDialog();
 
@@ -36,37 +69,123 @@ namespace Medidata.RwsCdsFormatter
                 return;
 
             outputFileTextBox.Text = outputSaveFileDialog.FileName;
+            formatButton.Enabled = CanEnableFormatButton();
+        }
+        
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void outputFileTextBox_TextChanged(object sender, EventArgs e) {
+            formatButton.Enabled = CanEnableFormatButton();
         }
 
+        private void sourceFileTextBox_TextChanged(object sender, EventArgs e) {
+            formatButton.Enabled = CanEnableFormatButton();
+        }
+
+        private void rowTemplateTextBox_TextChanged(object sender, EventArgs e) {
+            formatButton.Enabled = CanEnableFormatButton();
+            prettyPrintButton.Enabled = rowTemplateTextBox.Text.Length > 0;
+        }
+
+        private void prettyPrintButton_Click(object sender, EventArgs e) {
+            if (_template != null) {
+                rowTemplateTextBox.Text = _template;
+                _template = null;
+                prettyPrintButton.Text = @"Pretty";
+            } else {
+                _template = rowTemplateTextBox.Text;
+                var nl = Environment.NewLine;
+                var pretty= Regex.Replace(_template, @"\{%",nl +  @"{%");
+                rowTemplateTextBox.Text = Regex.Replace(pretty, @"%\}", @"%}" + nl);
+                prettyPrintButton.Text = @"Unpretty";
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void formatButton_Click(object sender, EventArgs e) {
             formatButton.Enabled = false;
 
-            FormatData(sourceFileTextBox.Text, outputFileTextBox.Text, rowTemplateTextBox.Text);
+            _running = true;
+            FormatData(sourceFileTextBox.Text, outputFileTextBox.Text, _template ?? rowTemplateTextBox.Text);
+            _running = false;
 
-            formatButton.Enabled = true;
+            formatButton.Enabled = CanEnableFormatButton();
         }
 
         #endregion
 
-        private void FormatData(string sourceFile, string outputFile, string rowTemplate) {
-            var t = Template.Parse(rowTemplate);
-            var lines = File.ReadAllLines(sourceFile).ToList();
+        #region Private methods
 
-            bool isFirst = true;
-            Record previous = null, current = null, next;
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private bool CanEnableFormatButton() {
+            var outputFile =outputFileTextBox.Text;
+            var sourceFile = sourceFileTextBox.Text;
+            var templateText = rowTemplateTextBox.Text;
+            var enabled = true;
+
+            enabled &= outputFile.Length > 0;
+            enabled &= sourceFile.Length > 0;
+            enabled &= templateText.Length > 0;
+
+            try {
+                enabled &= File.Exists(sourceFile);
+            } catch (Exception ex) {
+                Debug.WriteLine("CEFB-0100: " + ex.Message);
+            }
+
+            return enabled && !_running;
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sourceFile"></param>
+        /// <param name="outputFile"></param>
+        /// <param name="rowTemplate"></param>
+        private static void FormatData(string sourceFile, string outputFile, string rowTemplate) {
+            var isFirst = true;
+            Record previous = null;
+            Record current = null;
+            List<string> lines;
+            var sb = new StringBuilder();
+
+            var t = Template.Parse(rowTemplate);
+            if (t.Errors != null && t.Errors.Count > 0) {
+                sb.AppendLine("The following template occurred: ");
+                foreach (var e in t.Errors) {
+                    sb.AppendLine(e.Message);
+                }
+
+                MessageBox.Show(sb.ToString());
+                return;
+            }
+            try {
+                lines = File.ReadAllLines(sourceFile).ToList();
+            } catch (Exception ex) {
+                MessageBox.Show(@"The following occurred: " + ex.Message);
+                return;
+            }
 
             //ConfigurableDatasetRecordset is a Drop with a Name property
-            //
             var request = new ConfigurableDatasetRequest { Guid = Guid.NewGuid(), Date = DateTime.Now };
             var document = new ConfigurableDatasetDocument();
             var recordset = new ConfigurableDatasetRecordset();
-            var odm = new StringBuilder();
 
             document.Section = "header";
-            Render(t, odm, document, request, null, null, null, null);
+            Render(new RenderTemplate(t, sb, document, request));
 
-            for (int i = 2; i < lines.Count; i++) {
-                Record record = BuildRecord(lines[0], lines[i]);
+            for (var i = 2; i < lines.Count; i++) {
+                var record = BuildRecord(lines[0], lines[i]);
 
                 //bad records
                 if (record == null)
@@ -78,8 +197,15 @@ namespace Medidata.RwsCdsFormatter
                     current = record;
                     isFirst = false;
                 } else {
-                    next = record;
-                    Render(t, odm, document, request, recordset, previous, current, next);
+                    var next = record;
+                    var rt = new RenderTemplate(t, sb, document, request)
+                    {
+                        Recordset = recordset,
+                        PreviousRecord = previous,
+                        CurrentRecord = next
+                    };
+
+                    Render(rt);
                     previous = current;
                     current = next;
                 }
@@ -88,151 +214,67 @@ namespace Medidata.RwsCdsFormatter
             //Render Last Record
             if (!isFirst) {
                 current.IsLast = true;
-                Render(t, odm, document, request, recordset, previous, current, null);
+                var rt = new RenderTemplate(t, sb, document, request)
+                {
+                    Recordset = recordset,
+                    PreviousRecord = previous, 
+                    CurrentRecord = current
+                };
+
+                Render(rt);
             }
 
             document.Section = "footer";
-            Render(t, odm, document, request, null, null, null, null);
+            Render(new RenderTemplate(t, sb, document, request));
 
-            File.WriteAllText(outputFile, odm.ToString(), Encoding.UTF8);
+            try {
+                File.WriteAllText(outputFile, sb.ToString(), Encoding.UTF8);
+            } catch (Exception ex) {
+                MessageBox.Show(@"Failed to save output: " + ex.Message);
+            }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="columns"></param>
+        /// <param name="row"></param>
+        /// <returns></returns>
         private static Record BuildRecord(string columns, string row) {
-            string[] cols = columns.Split(',');
-            string[] cells = row.Split(',');
+            var cols = columns.Split(',');
+            var cells = row.Split(',');
 
             if (cols.Length != cells.Length)
                 return null;
 
-            Dictionary<string, string> stuff = new Dictionary<string, string>();
+            var stuff = new Dictionary<string, string>();
 
-            for (int c = 0; c < cols.Length; c++) {
+            for (var c = 0; c < cols.Length; c++) {
                 stuff[cols[c]] = cells[c];
             }
 
             return new Record(stuff);
         }
 
-        private static void Render(Template template,
-                StringBuilder odm,
-                ConfigurableDatasetDocument document,
-                ConfigurableDatasetRequest request,
-                ConfigurableDatasetRecordset recordset,
-                Record previousRecord,
-                Record currentRecord,
-                Record nextRecord) {
-            odm.Append(
-                       template.Render(
-                                       Hash.FromAnonymousObject(
-                                                                new
-                                                                {
-                                                                    document = document.ToLiquid(),
-                                                                    recordset = recordset == null ? null : recordset.ToLiquid(),
-                                                                    request = request.ToLiquid(),
-                                                                    previous = previousRecord == null ? null : previousRecord.ToLiquid(),
-                                                                    current = currentRecord == null ? null : currentRecord.ToLiquid(),
-                                                                    next = nextRecord == null ? null : nextRecord.ToLiquid()
-                                                                })));
-        }
-
-
-
-        public class Record : ILiquidizable
-        {
-            public bool IsFirst { get; set; }
-            public bool IsLast { get; set; }
-
-            public IDictionary<string, string> AttributesCollection { get; protected set; }
-
-            public Record(IDictionary<String, String> attributesCollection) {
-                AttributesCollection = attributesCollection;
-            }
-
-            public virtual IDictionary<String, String> GetAttributes() {
-                return AttributesCollection;
-            }
-
-            public override bool Equals(object obj) {
-                var record = obj as Record;
-                return record != null && record.AttributesCollection.DictionaryEquals(AttributesCollection);
-            }
-
-            public override int GetHashCode() {
-                return AttributesCollection.GetHashCode();
-            }
-
-            public virtual object ToLiquid() {
-                return new RecordDrop(this);
-            }
-        }
-
         /// <summary>
-        /// RecordDrop wraps the record object in a liquidizable object
+        /// 
         /// </summary>
-        public class RecordDrop : Drop
-        {
-            private Record record;
+        /// <param name="rt"></param>
+        private static void Render(RenderTemplate rt) {
+            var anon =
+                new
+                {
+                    document = rt.Document.ToLiquid(),
+                    recordset = rt.Recordset == null ? null : rt.Recordset.ToLiquid(),
+                    request = rt.Request.ToLiquid(),
+                    previous = rt.PreviousRecord == null ? null : rt.PreviousRecord.ToLiquid(),
+                    current = rt.CurrentRecord == null ? null : rt.CurrentRecord.ToLiquid(),
+                    next = rt.NextRecord == null ? null : rt.NextRecord.ToLiquid()
+                };
 
-            public bool First {
-                get { return record.IsFirst; }
-            }
-
-            public bool Last {
-                get { return record.IsLast; }
-            }
-
-
-
-            public IDictionary<string, string> Attributes {
-                get {
-                    return record.GetAttributes();
-                }
-            }
-
-            public RecordDrop() {
-            }
-
-            public RecordDrop(Record record) {
-                this.record = record;
-            }
-
-            public override object BeforeMethod(string key) {
-                return Attributes.Keys.Contains(key) ? Attributes[key] : String.Empty;
-            }
+            rt.Odm.Append(rt.Template.Render(Hash.FromAnonymousObject(anon)));
         }
 
-        public class ConfigurableDatasetRecordset : Drop
-        {
-            public string Name { get; set; }
-
-            public override object ToLiquid() {
-                return this;
-            }
-        }
-
-        public class ConfigurableDatasetDocument : Drop
-        {
-            public string Section { get; set; }
-
-            public override object ToLiquid() {
-                return this;
-            }
-        }
-
-        public class ConfigurableDatasetRequest : Drop
-        {
-            public Guid Guid { get; set; }
-            public DateTime Date { get; set; }
-
-            public string Id {
-                get {
-                    return Guid.ToString();
-                }
-            }
-
-            public override object ToLiquid() {
-                return this;
-            }
-        }
+        #endregion
     }
 }

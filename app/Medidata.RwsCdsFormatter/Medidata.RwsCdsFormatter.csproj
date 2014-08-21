@@ -65,6 +65,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Compare.cs" />
+    <Compile Include="Liquid\ConfigurableDatasetDocument.cs" />
+    <Compile Include="Liquid\ConfigurableDatasetRecordset.cs" />
+    <Compile Include="Liquid\ConfigurableDatasetRequest.cs" />
+    <Compile Include="Liquid\Record.cs" />
+    <Compile Include="Liquid\RecordDrop.cs" />
+    <Compile Include="Liquid\RenderTemplate.cs" />
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
